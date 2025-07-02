@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>shade SaaS Detector</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      width: 300px;
+      padding: 15px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 15px;
+    }
+    .title {
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .toggle {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 24px;
+    }
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .hidden {
+      display: none !important;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 24px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    input:checked + .slider {
+      background-color: #2196F3;
+    }
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 14px;
+      margin: 4px 2px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    .status {
+      margin-top: 15px;
+      padding: 10px;
+      background-color: #f8f8f8;
+      border-radius: 4px;
+    }
+    .status-item {
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">Login Detector</div>
+    <label class="toggle" id="enabled-toggler">
+      <input type="checkbox" id="enabled-toggle" checked>
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div class="form-group">
+    <label for="api-url">Backend API URL:</label>
+    <div style="display: flex; gap: 5px;">
+      <input type="text" id="api-url" placeholder="http://localhost:8080" style="flex-grow: 1;">
+      <button id="test-api-button" class="button" style="padding: 8px; background-color: #2196F3;">Test</button>
+    </div>
+    <div id="api-test-result" style="margin-top: 5px; font-size: 12px; display: none;"></div>
+  </div>
+
+  <div class="form-group">
+    <label for="token">Authentication token:</label>
+    <div style="display: flex; gap: 5px;">
+      <input type="password" id="token" placeholder="" style="flex-grow: 1;">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="device-id">Device ID:</label>
+    <input type="text" id="device-id" readonly>
+  </div>
+
+  <button id="save-button" class="button">Save Settings</button>
+
+  <div class="status">
+    <div class="status-item">Status: <span id="status-text">Active</span></div>
+    <div class="status-item">Version: <span id="version-text">1.0.0</span></div>
+  </div>
+
+  <script src="../dist/popup.js"></script>
+</body>
+</html>

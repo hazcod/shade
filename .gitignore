@@ -1,0 +1,9 @@
+/extension/node_modules/
+/extension/dist/
+backend/shade
+.DS_Store
+**/*.yml
+extension/src/*.html
+/extension/test-login.html
+/extension/popup.html
+.idea/
