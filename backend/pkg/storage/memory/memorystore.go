@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/hazcod/shade/pkg/events"
 	"github.com/sirupsen/logrus"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -86,50 +87,87 @@ func (s *InMemoryStore) GetDomainsForUser(username string) ([]string, error) {
 }
 
 func (s *InMemoryStore) GetDuplicatePasswordsForUser(username string) ([][]string, error) {
-	return nil, nil
-}
-
-func (s *InMemoryStore) GetDuplicatePasswords() (map[string]map[string]string, error) {
-	// Map of password hash -> username -> domain
-	passwordMap := make(map[string]map[string]string)
+	// Map of password hash -> domain
+	domainMap := make(map[string][]string)
 
 	for _, deviceData := range s.data {
 		for _, eventEntry := range deviceData {
-			eventUsername := strings.ToLower(eventEntry.User)
 			eventDomain := strings.ToLower(eventEntry.Domain)
 			passwordHash := eventEntry.Hash
 
-			if _, ok := passwordMap[passwordHash]; !ok {
-				passwordMap[passwordHash] = make(map[string]string)
+			if _, ok := domainMap[passwordHash]; !ok {
+				domainMap[passwordHash] = make([]string, 0)
 			}
 
-			// Store the domain if this password has already been seen for this user with a different domain
-			if existingDomain, exists := passwordMap[passwordHash][eventUsername]; exists {
-				if existingDomain != eventDomain {
-					// Duplicate password found for the same user across different domains
-					// keep both
-					passwordMap[passwordHash][eventUsername] = existingDomain + "," + eventDomain
+			found := false
+			for _, domain := range domainMap[passwordHash] {
+				if domain == eventDomain {
+					found = true
+					break
 				}
-			} else {
-				passwordMap[passwordHash][eventUsername] = eventDomain
+			}
+
+			if !found {
+				domainMap[passwordHash] = append(domainMap[passwordHash], eventDomain)
 			}
 		}
 	}
 
-	// Flatten only entries where the password is reused (i.e. multiple domains per user)
-	duplicates := make(map[string]map[string]string)
-	for hash, userDomains := range passwordMap {
-		for user, domainStr := range userDomains {
-			if strings.Contains(domainStr, ",") {
-				if _, ok := duplicates[user]; !ok {
-					duplicates[user] = make(map[string]string)
-				}
-				duplicates[user][hash] = domainStr
+	dupes := make([][]string, 0)
+	for _, userDomains := range domainMap {
+		dupes = append(dupes, userDomains)
+	}
+
+	return dupes, nil
+}
+
+func (s *InMemoryStore) GetDuplicatePasswords() (map[string]map[string]string, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	// user -> password hash -> set of domains
+	userPasswordDomains := make(map[string]map[string]map[string]struct{})
+
+	for _, deviceData := range s.data {
+		for _, eventEntry := range deviceData {
+			user := strings.ToLower(eventEntry.User)
+			domain := strings.ToLower(eventEntry.Domain)
+			hash := eventEntry.Hash
+
+			if _, ok := userPasswordDomains[user]; !ok {
+				userPasswordDomains[user] = make(map[string]map[string]struct{})
 			}
+			if _, ok := userPasswordDomains[user][hash]; !ok {
+				userPasswordDomains[user][hash] = make(map[string]struct{})
+			}
+			userPasswordDomains[user][hash][domain] = struct{}{}
 		}
 	}
 
-	return duplicates, nil
+	// Build result: user -> hash -> comma-separated list of domains
+	result := make(map[string]map[string]string)
+
+	for user, hashMap := range userPasswordDomains {
+		for hash, domainSet := range hashMap {
+			if len(domainSet) < 2 {
+				continue // not a duplicate use
+			}
+
+			if _, ok := result[user]; !ok {
+				result[user] = make(map[string]string)
+			}
+
+			domains := make([]string, 0, len(domainSet))
+			for d := range domainSet {
+				domains = append(domains, d)
+			}
+
+			sort.Strings(domains) // optional, for consistency
+			result[user][hash] = strings.Join(domains, ", ")
+		}
+	}
+
+	return result, nil
 }
 
 func (s *InMemoryStore) IsValidToken(token string) (bool, error) {
