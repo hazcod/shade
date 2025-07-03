@@ -35,6 +35,22 @@ The Chrome extension configuration profile looks like this:
 }
 ```
 
+And an example configuration file for the Go backend:
+```yaml
+log:
+  level: info
+
+http:
+    port: 8080
+    interface: 0.0.0.0
+
+storage:
+    type: memory
+    properties:
+      token: YOUR-LONG-SECRET-TOKEN-VALUE-HERE
+```
+Which you could run with `shade -config=dev.yml`.
+
 ## Project Structure
 
 - `backend/`: Go backend server
