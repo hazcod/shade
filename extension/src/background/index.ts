@@ -5,13 +5,60 @@
 import { LoginData, MessageType } from '../shared/types';
 import { loadConfig, sendToBackend } from '../shared/utils';
 
-async function sha512(input: string): Promise<string> {
+async function sha(mode: string, input: string): Promise<string> {
   const encoder = new TextEncoder();
   const data = encoder.encode(input);
-  const hashBuffer = await crypto.subtle.digest('SHA-512', data);
+  const hashBuffer = await crypto.subtle.digest(mode, data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
+
+const checkHIBP = async(
+    partialLoginData: Partial<LoginData>,
+): Promise<void> => {
+  try {
+    // HIBP needs a SHA1 hash
+    let hashedPassword = (await sha('SHA-1', <string>partialLoginData.password)).toUpperCase();
+    const hashPrefix = hashedPassword.substring(0, 5);
+    const hashSuffix = hashedPassword.substring(5);
+
+    // check HIBP using their privacy-preserving API
+    let url = 'https://api.pwnedpasswords.com/range/' + hashPrefix;
+    let response = await fetch(url, { method: 'GET' });
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      console.error('Failed to fetch HIBP:', responseText);
+    }
+
+    const lines = responseText.split('\n');
+    const found = lines.some(line => line.startsWith(hashSuffix));
+
+    // check the response output if it contains our hash
+    if (! found) {
+      return;
+    }
+
+    // the password is found in HIBP!
+    console.log('Password for ' + partialLoginData.domain + ' was found on HIBP.');
+
+    // Use a data URL for the icon to avoid SVG compatibility issues
+    try {
+      chrome.notifications.create({
+        type: "basic",
+        iconUrl: chrome.runtime.getURL('icons/warning.png'),
+        title: "Password Warning!",
+        message: "Your password for " + partialLoginData.domain + " has been leaked on the internet!",
+        priority: 2,
+      });
+    } catch (error) {
+      console.error('Failed to create HIBP notification:', error);
+    }
+
+  } catch (error) {
+    console.error('failed to check HIBP', error);
+  }
+};
 
 /**
  * Handle login detection
@@ -32,7 +79,7 @@ const handleLoginDetected = async (
       capturedTime: new Date().toISOString(),
     };
 
-    if (filters && filters.length > 0) {
+    if (Array.isArray(filters) && filters.length > 0) {
       let found = false;
 
       for (const filter of filters) {
@@ -56,8 +103,8 @@ const handleLoginDetected = async (
       return;
     }
 
-    // calculate the argon hash of this
-    let hashedPassword = await sha512(loginData.password);
+    // calculate the hash of this
+    let hashedPassword = await sha('SHA-512', loginData.password);
 
     // send to backend
     const response = await sendToBackend('/api/login/register', {
@@ -101,6 +148,7 @@ const initialize = async (): Promise<void> => {
         switch (message.type) {
           case MessageType.LOGIN_DETECTED:
             await handleLoginDetected(message.data, config.api, config.id, config.filters);
+            checkHIBP(message.data).then(r => {});
             return { success: true };
 
           case MessageType.GET_DEVICE_ID:

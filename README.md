@@ -3,9 +3,17 @@
 A system for detecting shadow SaaS and securely recording the credentials used.<br/>
 The system consists of a Go API backend and a browser extension written in TypeScript.
 
+The extension communicates to a backend:
+
 ![Concept diagram](.github/img/concept.png)
 
+And very roughly looks like this:
+
 ![UI screenshot](.github/img/ui.png)
+
+And integrates with HaveIBeenPwned to check your passwords (in a secure way):
+
+![HIBP integration warning](.github/img/hibp-warning.png)
 
 ## How does it work?
 
@@ -13,6 +21,7 @@ The browser extension is deployed to your company browsers with a secret token.
 Using this token, the extension will now report any login events to a web (SaaS) application of that user to the backend.
 Only events using the correct secret user token and username filter will be processed.
 A typical use case is only processing email usernames for the company domain.
+Every password entry will be matched to [HIBPs k-Anonymity model for password checking](https://haveibeenpwned.com/API/v3#SearchingPwnedPasswordsByRange). 
 
 The Chrome extension configuration profile looks like this:
 ```json

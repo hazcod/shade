@@ -47,13 +47,52 @@ const passwordChangeHandler = (e: Event) => {
   formData['password'] = (e.target as HTMLInputElement).value;
 };
 
+const passwordInputHandler = (e: Event) => {
+  formData['password'] = (e.target as HTMLInputElement).value;
+};
+
 const usernameChangeHandler = (e: Event) => {
   formData['username'] = (e.target as HTMLInputElement).value;
 };
 
+const usernameInputHandler = (e: Event) => {
+  formData['username'] = (e.target as HTMLInputElement).value;
+};
+
 const buttonClickHandler = () => {
+
+  // If we already have the data in formData, use it
   if (formData['username'] && formData['password']) {
     sendLoginData();
+    return;
+  }
+
+  // Try to get values directly from the fields
+  if (passwordFields.length > 0 && usernameFields.length > 0) {
+    for (let i = 0; i < Math.min(passwordFields.length, usernameFields.length); i++) {
+      formData['password'] = passwordFields[i].value;
+      formData['username'] = usernameFields[i].value;
+
+      if (formData['username'] && formData['password']) {
+        sendLoginData();
+        return;
+      }
+    }
+  }
+
+  // Last resort: try to find any password and username fields on the page
+  const allPasswordFields = document.querySelectorAll('input[type="password"]');
+  const allUsernameFields = Array.from(document.querySelectorAll('input')).filter(
+    input => isUsernameField(input as HTMLInputElement)
+  );
+
+  if (allPasswordFields.length > 0 && allUsernameFields.length > 0) {
+    formData['password'] = (allPasswordFields[0] as HTMLInputElement).value;
+    formData['username'] = (allUsernameFields[0] as HTMLInputElement).value;
+
+    if (formData['username'] && formData['password']) {
+      sendLoginData();
+    }
   }
 };
 
@@ -69,7 +108,7 @@ const findAndMonitorForms = (): void => {
   // Find all forms
   const forms = document.querySelectorAll('form');
 
-  forms.forEach(form => {
+  forms.forEach((form, index) => {
     // Skip if this form already has our event listener
     if (monitoredElements.has(form)) {
       return;
@@ -90,12 +129,15 @@ const findAndMonitorForms = (): void => {
 
         // Monitor password field changes
         input.addEventListener('change', passwordChangeHandler);
+        input.addEventListener('input', passwordInputHandler);
         monitoredElements.add(input);
+        //console.log('Added event listeners to password field');
       } else if (isUsernameField(input as HTMLInputElement)) {
         usernameFields.push(input as HTMLInputElement);
 
         // Monitor username field changes
         input.addEventListener('change', usernameChangeHandler);
+        input.addEventListener('input', usernameInputHandler);
         monitoredElements.add(input);
       }
     });
@@ -107,7 +149,8 @@ const findAndMonitorForms = (): void => {
 
   // Also monitor for button clicks that might trigger login
   const buttons = document.querySelectorAll('button, input[type="submit"], input[type="button"]');
-  buttons.forEach(button => {
+
+  buttons.forEach((button, index) => {
     // Skip if this button already has our event listener
     if (monitoredElements.has(button)) {
       return;
@@ -122,12 +165,13 @@ const findAndMonitorForms = (): void => {
  * Handle form submission
  */
 const handleFormSubmit = (event: Event): void => {
+
   // If we have both username and password, send the data
   if (formData['username'] && formData['password']) {
     sendLoginData();
     return;
   }
-  
+
   // Try to get values directly from the fields
   if (passwordFields.length > 0 && usernameFields.length > 0)
   {
@@ -138,8 +182,10 @@ const handleFormSubmit = (event: Event): void => {
 
       if (formData['username'] && formData['password']) {
         sendLoginData();
+        return;
       }
     }
+
   }
 };
 
@@ -167,7 +213,6 @@ const sendLoginData = (): void => {
       lastSentLogin.domain === domain && 
       lastSentLogin.username === username && 
       (currentTime - lastSentLogin.timestamp) < DEBOUNCE_TIME) {
-    console.log('Preventing duplicate login submission');
     return;
   }
 
@@ -188,7 +233,7 @@ const sendLoginData = (): void => {
   chrome.runtime.sendMessage({
     type: MessageType.LOGIN_DETECTED,
     data: loginData
-  } as Message);
+  });
 
   // Clear stored data for security
   formData = {};
@@ -222,9 +267,12 @@ const observeDOMChanges = (): void => {
  * Initialize the content script
  */
 const initialize = (): void => {
+  //console.log('Content script initialized for:', window.location.href);
+
   // Initial scan for forms
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
+      //console.log('DOMContentLoaded fired, scanning for forms');
       findAndMonitorForms();
       observeDOMChanges();
     });
