@@ -13,52 +13,6 @@ async function sha(mode: string, input: string): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-const checkHIBP = async(
-    partialLoginData: Partial<LoginData>,
-): Promise<void> => {
-  try {
-    // HIBP needs a SHA1 hash
-    let hashedPassword = (await sha('SHA-1', <string>partialLoginData.password)).toUpperCase();
-    const hashPrefix = hashedPassword.substring(0, 5);
-    const hashSuffix = hashedPassword.substring(5);
-
-    // check HIBP using their privacy-preserving API
-    let url = 'https://api.pwnedpasswords.com/range/' + hashPrefix;
-    let response = await fetch(url, { method: 'GET' });
-    const responseText = await response.text();
-
-    if (!response.ok) {
-      console.error('Failed to fetch HIBP:', responseText);
-    }
-
-    const lines = responseText.split('\n');
-    const found = lines.some(line => line.startsWith(hashSuffix));
-
-    // check the response output if it contains our hash
-    if (! found) {
-      return;
-    }
-
-    // the password is found in HIBP!
-    console.log('Password for ' + partialLoginData.domain + ' was found on HIBP.');
-
-    // Use a data URL for the icon to avoid SVG compatibility issues
-    try {
-      chrome.notifications.create({
-        type: "basic",
-        iconUrl: chrome.runtime.getURL('icons/warning.png'),
-        title: "Password Warning!",
-        message: "Your password for " + partialLoginData.domain + " has been leaked on the internet!",
-        priority: 2,
-      });
-    } catch (error) {
-      console.error('Failed to create HIBP notification:', error);
-    }
-
-  } catch (error) {
-    console.error('failed to check HIBP', error);
-  }
-};
 
 /**
  * Handle login detection
@@ -107,7 +61,7 @@ const handleLoginDetected = async (
     let hashedPassword = await sha('SHA-512', loginData.password);
 
     // send to backend
-    const response = await sendToBackend('/api/login/register', {
+    const response = await sendToBackend('/api/creds/register', {
       domain: loginData.domain,
       username: loginData.username,
       hash: hashedPassword,
@@ -118,6 +72,32 @@ const handleLoginDetected = async (
     if (!response.ok) {
       const errorData = await response.json();
       console.error('Failed to send login data:', errorData);
+      return;
+    }
+
+    // Process the response for HIBP information
+    try {
+      const responseData = await response.json();
+      
+      if (responseData.hibp && responseData.hibp.checked && responseData.hibp.breached) {
+        // Password was found in HIBP database - show warning
+        console.log(`Password for ${loginData.domain} was found in HIBP database (${responseData.hibp.breach_count} breaches)`);
+        
+        // Show notification to user
+        try {
+          chrome.notifications.create({
+            type: "basic",
+            iconUrl: chrome.runtime.getURL('icons/icon48.svg'),
+            title: "Password Security Warning!",
+            message: `Your password for ${loginData.domain} has been found in ${responseData.hibp.breach_count} data breach(es). Consider changing it immediately.`,
+            priority: 2,
+          });
+        } catch (notificationError) {
+          console.error('Failed to create HIBP notification:', notificationError);
+        }
+      }
+    } catch (parseError) {
+      console.error('Failed to parse backend response:', parseError);
     }
   } catch (error) {
     console.error('Error handling login detection:', error);
@@ -148,7 +128,6 @@ const initialize = async (): Promise<void> => {
         switch (message.type) {
           case MessageType.LOGIN_DETECTED:
             await handleLoginDetected(message.data, config.api, config.id, config.filters);
-            checkHIBP(message.data).then(r => {});
             return { success: true };
 
           case MessageType.GET_DEVICE_ID:

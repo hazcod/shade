@@ -1,0 +1,35 @@
+{{define "content"}}
+<h2>Password Security</h2>
+
+<hr>
+
+<div class="row">
+	<div class="col-md-6">
+		<h4>Duplicate Passwords</h4>
+		<div class="list-group">
+			{{range $user, $hashes := .DuplicatePasswords}}
+			<div class="list-group-item">
+				<h6 class="mb-1">{{$user}}</h6>
+				{{range $hash, $domains := $hashes}}
+				<p class="mb-1"><small>Domains: {{$domains}}</small></p>
+				{{end}}
+			</div>
+			{{else}}
+			<div class="list-group-item">No duplicate passwords found.</div>
+			{{end}}
+		</div>
+	</div>
+	<div class="col-md-6">
+		<h4>Users without MFA</h4>
+		<div class="list-group">
+			{{range .UsersWithoutMFA}}
+			<div class="list-group-item">
+				 {{.}}
+			</div>
+			{{else}}
+			<div class="list-group-item">All users have MFA enabled.</div>
+			{{end}}
+		</div>
+	</div>
+</div>
+{{end}}

@@ -1,0 +1,29 @@
+{{define "content"}}
+<h2>Discovered SaaS Applications</h2>
+
+<hr>
+
+<div class="mb-3">
+	<input type="text" class="form-control" id="searchInput" placeholder="Search domains..." onkeyup="filterTable()">
+</div>
+<table class="table table-striped" id="saasTable">
+	<thead>
+		<tr>
+			<th>Domain</th>
+			<th>Status</th>
+		</tr>
+	</thead>
+	<tbody>
+		{{range .Domains}}
+		<tr>
+			<td>{{.}}</td>
+			<td><span class="badge bg-success">Active</span></td>
+		</tr>
+		{{else}}
+		<tr>
+			<td colspan="2">No domains found.</td>
+		</tr>
+		{{end}}
+	</tbody>
+</table>
+{{end}}

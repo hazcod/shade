@@ -7,6 +7,8 @@ export interface LoginData {
   password: string;
   deviceId: string;
   capturedTime?: string;
+  hasMFA?: boolean;
+  mfaType?: string;
 }
 
 /**

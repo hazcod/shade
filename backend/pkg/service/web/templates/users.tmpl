@@ -1,0 +1,32 @@
+{{define "content"}}
+<h2>Enrolled Endpoints</h2>
+
+<hr>
+
+<table class="table table-striped">
+	<thead>
+		<tr>
+			<th>Username</th>
+			<th>ID</th>
+			<th>Hostname</th>
+			<th>IP Address</th>
+			<th>Last Seen</th>
+		</tr>
+	</thead>
+	<tbody>
+		{{range .Users}}
+		<tr>
+			<td>{{.Username}}</td>
+			<td><code>{{.ID}}</code></td>
+			<td>{{.Hostname}}</td>
+			<td>{{.IP}}</td>
+			<td>{{.LastSeen}}</td>
+		</tr>
+		{{else}}
+		<tr>
+			<td colspan="5">No enrolled users found.</td>
+		</tr>
+		{{end}}
+	</tbody>
+</table>
+{{end}}

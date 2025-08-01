@@ -39,7 +39,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["dist/*.js", "icons/*"],
+      "resources": ["dist/*.js", "icons/*", "test-login.html"],
       "matches": ["<all_urls>"]
     }
   ],

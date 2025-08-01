@@ -1,0 +1,36 @@
+{{define "content"}}
+<div class="row">
+	<div class="col-md-3">
+		<div class="card">
+			<div class="card-body">
+				<h5 class="card-title">Total Users</h5>
+				<h2 class="text-primary">{{.Stats.TotalUsers}}</h2>
+			</div>
+		</div>
+	</div>
+	<div class="col-md-3">
+		<div class="card">
+			<div class="card-body">
+				<h5 class="card-title">Total Domains</h5>
+				<h2 class="text-info">{{.Stats.TotalDomains}}</h2>
+			</div>
+		</div>
+	</div>
+	<div class="col-md-3">
+		<div class="card">
+			<div class="card-body">
+				<h5 class="card-title">Duplicate Passwords</h5>
+				<h2 class="text-warning">{{.Stats.DuplicatePasswords}}</h2>
+			</div>
+		</div>
+	</div>
+	<div class="col-md-3">
+		<div class="card">
+			<div class="card-body">
+				<h5 class="card-title">Users without MFA</h5>
+				<h2 class="text-danger">{{.Stats.UsersWithoutMFA}}</h2>
+			</div>
+		</div>
+	</div>
+</div>
+{{end}}

@@ -12,4 +12,8 @@ type LoginEvent struct {
 	Domain    string
 	Hash      string
 	DeviceID  string
+	IP        string
+	Hostname  string
+	HasMFA    bool
+	MFAType   string
 }

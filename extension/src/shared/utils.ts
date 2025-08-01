@@ -18,7 +18,11 @@ export const generateDeviceId = (): string => {
 export const getDomain = (url: string): string => {
   try {
     const urlObj = new URL(url);
-    return urlObj.hostname;
+    let port = urlObj.port;
+    if (port == '') {
+      port = urlObj.protocol == 'https:' ? '443' : '80';
+    }
+    return urlObj.protocol + '//' + urlObj.hostname + ':' + port;
   } catch (e) {
     console.error('Invalid URL:', url);
     return '';

@@ -9,7 +9,7 @@ The extension communicates to a backend:
 
 And very roughly looks like this:
 
-![UI screenshot](.github/img/ui.png)
+![UI screenshot](.github/img/dashboard.png)
 
 And integrates with HaveIBeenPwned to check your passwords (in a secure way):
 
@@ -26,14 +26,22 @@ Every password entry will be matched to [HIBPs k-Anonymity model for password ch
 The Chrome extension configuration profile looks like this:
 ```json
 {
-  "filters": ["domain.com"], // what domains you would like to filter for in the usernames
-  "locked": true, // do you allow the user to change settings, not recommended except for debugging.
-  "api": "http://localhost:8080", // where is the backend located
-  "id": "",       // the unique device id to use, will be randomly generated if empty
-  "enabled": true,// enable or disable the extension
-  "token": ""     // the secret user token that authenticates this extension
+  "filters": ["domain.com"],
+  "locked": true,
+  "api": "http://localhost:8080",
+  "id": "",
+  "enabled": true,
+  "token": ""
 }
 ```
+
+Configuration options:
+- **filters**: Array of domains to filter for in usernames (e.g., company domain)
+- **locked**: Whether users can change settings (recommended: true for production)
+- **api**: Backend server URL
+- **id**: Unique device identifier (auto-generated if empty)
+- **enabled**: Enable/disable the extension
+- **token**: Secret authentication token for backend communication
 
 And an example configuration file for the Go backend:
 ```yaml
@@ -86,8 +94,33 @@ The backend is a Go HTTP server that provides API endpoints for receiving and st
 ### API Endpoints
 
 - `GET /api/health`: Health check endpoint (e.g. to verify browser extension token)
-- `POST /api/login/register`: Registers a login event for the user (user, domain, password hash)
-- `POST /api/password/domaincheck`: Verifies if the user password is being shared across other websites.
+- `POST /api/creds/register`: Registers a login event for the user (user, domain, password hash)
+- `POST /api/password/domaincheck`: Verifies if the user password is being shared across other websites
+- `GET /api/password/compromised`: Returns compromised passwords from HIBP database
+
+### Web Dashboard
+
+The backend provides a comprehensive web dashboard accessible at `/dashboard/` with the following pages:
+
+- **Dashboard** (`/dashboard/`): Overview with statistics cards showing total users, domains, duplicate passwords, and users without MFA
+- **Discovered SaaS** (`/dashboard/saas`): Table view of all discovered SaaS applications with search/filter functionality
+- **Password Security** (`/dashboard/security`): Shows users with duplicate passwords and users without MFA
+- **Enrolled Users** (`/dashboard/users`): Lists all enrolled users with their device tokens, hostnames, IP addresses, and last seen timestamps
+
+### Authentication
+
+The web dashboard supports multiple authentication providers:
+- **Local Authentication**: Username/password authentication with configurable users
+- **OIDC**: OpenID Connect integration for enterprise SSO
+
+### HIBP Integration
+
+The backend integrates with Have I Been Pwned (HIBP) to check password security:
+- **Real-time Checking**: Every login event is checked against HIBP database
+- **Caching**: Results are cached for 1 hour to improve performance
+- **Bulk Checking**: Scheduled checks every 8 hours for all stored passwords
+- **Privacy-Preserving**: Uses k-anonymity model - only first 5 characters of SHA-1 hash are sent
+- **User Notifications**: Extension shows warnings when breached passwords are detected
 
 ## Chrome Extension
 
@@ -95,10 +128,14 @@ The Chrome extension detects login events on web pages and sends the data to the
 
 ### Features
 
-- Detects login forms and submissions
-- Captures domain, username, and password
-- Sends data to the backend with a unique device ID
-- Provides a popup UI for configuration
+- **Login Detection**: Automatically detects login forms and submissions on web pages
+- **MFA Support**: Detects multi-factor authentication fields (TOTP, SMS codes) including support for multi-step login flows
+- **Success Validation**: Only sends login data for successful authentication attempts, filtering out failed logins
+- **Data Capture**: Captures domain, username, password hash, MFA status, client IP, and hostname
+- **HIBP Notifications**: Shows real-time warnings when passwords are found in breach databases
+- **Device Tracking**: Assigns unique device IDs and tracks real client information
+- **Configuration UI**: Popup interface for settings with API testing and test page access
+- **Privacy-First**: Passwords are hashed locally using SHA-512 before transmission
 
 ### Building the Extension
 
@@ -126,7 +163,120 @@ make extension
 ### Configuration
 
 Click on the extension icon in the Chrome toolbar to open the popup UI. From there, you can:
+# Shade - Password Security Monitoring
 
+Shade is a tool for monitoring password security across multiple services. It detects and reports duplicate password usage across different services and can provide insights into password security risks.
+
+## Features
+
+- Track password usage across multiple services
+- Detect duplicate password usage
+- Web dashboard for monitoring
+- Multiple authentication provider support (Local, OIDC)
+- API for integration with other services
+
+## Authentication
+
+Shade supports multiple authentication providers:
+
+1. **Local Authentication**: Username/password authentication against a local configuration
+2. **OIDC Authentication**: Single Sign-On using any OpenID Connect provider (Google, Okta, Auth0, etc.)
+
+### Configuration
+
+Authentication is configured in the `config.yaml` file:
+
+```yaml
+auth:
+  type: "local"  # or "oidc"
+  secret: "your-session-secret"
+  properties:
+    # For local auth:
+    users:
+      - username: "admin"
+        password_hash: "$2a$10$..."
+        email: "admin@example.com"
+        roles: ["admin"]
+
+    # For OIDC auth:
+    provider_url: "https://accounts.google.com"
+    client_id: "your-client-id"
+    client_secret: "your-client-secret"
+    redirect_url: "http://localhost:8080/auth/callback"
+    scopes: ["profile", "email"]
+```
+
+## Installation
+
+1. Clone the repository
+2. Copy `config.example.yaml` to `config.yaml` and configure it for your environment
+3. Build and run the application
+
+```bash
+go build -o shade ./cmd
+./shade -config config.yaml
+```
+
+## Usage
+
+Once the server is running, you can access the dashboard at `http://localhost:8080`.
+
+You'll need to log in using credentials configured in the config file (for local auth) or via your OIDC provider (for OIDC auth).
+
+## API
+
+All API endpoints require authentication:
+
+- `GET /api/health` - Check the health of the system
+- `POST /api/login/register` - Register a new login event
+- `GET /api/password/domaincheck` - Check for duplicate password usage
+
+## Local development
+
+1. Build the extension with `make extension`.
+2. Run the local server with `make`.
+3. Load the extension via 'Load unpacked extension' from `chrome://extensions`.
+4. Open the extension page in Chrome, click on `Inspect views` and configure the extension there:
+```js
+chrome.storage.local.set({ config: { filters:[], locked: true, api: 'http://localhost:8080', id: '1', enabled: true, token: 'foo' } }, () => {
+    console.log("Config saved.");
+}); 
+```
+5. Open up the embedded test page at [chrome-extension://ppkdjdnjclkkfmkflkpibohckapebacn/test-login.html](chrome-extension://ppkdjdnjclkkfmkflkpibohckapebacn/test-login.html)
+
+## Development and Testing
+
+### Test Pages
+
+The project includes several test pages for development and validation:
+
+- **test_login_success.html**: Tests login success/failure detection with simulated scenarios
+- **test_multistep_login.html**: Tests multi-step authentication flows and MFA detection
+- **Extension Test Page**: Accessible via "Open Test Page" button in extension popup
+
+### Webpack Configuration
+
+The extension uses webpack with environment-specific optimizations:
+
+```bash
+# Development build (unminified for debugging)
+npm run build -- --mode=development
+
+# Production build (minified and optimized)
+npm run build -- --mode=production
+```
+
+### MFA Detection
+
+The extension automatically detects various MFA field types:
+- **TOTP Fields**: Numeric inputs with patterns like `totp`, `mfa`, `code`, `token`
+- **Multi-step Flows**: Waits for MFA fields to appear after initial login
+- **Generic Detection**: Uses common MFA field patterns that work across different websites
+- **Field Characteristics**: Detects based on maxLength, autocomplete, and inputMode attributes
+
+## License
+
+[License information]
 - Enable/disable the extension
 - Set the backend API URL
 - View the device ID

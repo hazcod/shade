@@ -5,18 +5,18 @@
 import { ExtensionConfig } from '../shared/types';
 import { loadConfig, saveConfig } from '../shared/utils';
 
-// DOM elements
-const enabledToggle = document.getElementById('enabled-toggle') as HTMLInputElement;
-const enabledToggler = document.getElementById('enabled-toggler') as HTMLInputElement;
-const apiUrlInput = document.getElementById('api-url') as HTMLInputElement;
-const tokenInput = document.getElementById('token') as HTMLInputElement;
-const deviceIdInput = document.getElementById('device-id') as HTMLInputElement;
-const saveButton = document.getElementById('save-button') as HTMLButtonElement;
-const testApiButton = document.getElementById('test-api-button') as HTMLButtonElement;
-const apiTestResult = document.getElementById('api-test-result') as HTMLDivElement;
-const statusText = document.getElementById('status-text') as HTMLSpanElement;
-const versionText = document.getElementById('version-text') as HTMLSpanElement;
-let isLocked : boolean;
+// DOM elements - will be initialized when DOM is ready
+let enabledToggle: HTMLInputElement;
+let enabledToggler: HTMLInputElement;
+let apiUrlInput: HTMLInputElement;
+let tokenInput: HTMLInputElement;
+let deviceIdInput: HTMLInputElement;
+let saveButton: HTMLButtonElement;
+let testApiButton: HTMLButtonElement;
+let apiTestResult: HTMLDivElement;
+let statusText: HTMLSpanElement;
+let versionText: HTMLSpanElement;
+let isLocked: boolean;
 
 /**
  * Load and display configuration
@@ -193,13 +193,36 @@ const showTestResult = (message: string, success: boolean): void => {
  * Initialize the popup
  */
 const initialize = (): void => {
+  // Initialize DOM elements
+  enabledToggle = document.getElementById('enabled-toggle') as HTMLInputElement;
+  enabledToggler = document.getElementById('enabled-toggler') as HTMLInputElement;
+  apiUrlInput = document.getElementById('api-url') as HTMLInputElement;
+  tokenInput = document.getElementById('token') as HTMLInputElement;
+  deviceIdInput = document.getElementById('device-id') as HTMLInputElement;
+  saveButton = document.getElementById('save-button') as HTMLButtonElement;
+  testApiButton = document.getElementById('test-api-button') as HTMLButtonElement;
+  apiTestResult = document.getElementById('api-test-result') as HTMLDivElement;
+  statusText = document.getElementById('status-text') as HTMLSpanElement;
+  versionText = document.getElementById('version-text') as HTMLSpanElement;
+
+  // Check if all elements were found
+  if (!enabledToggle || !enabledToggler || !apiUrlInput || !tokenInput || !deviceIdInput || 
+      !saveButton || !testApiButton || !apiTestResult || !statusText || !versionText) {
+    console.error('Some DOM elements were not found');
+    return;
+  }
+
   // Load and display configuration
   loadAndDisplayConfig();
 
   // Set up event listeners
+  console.log(saveButton);
+  console.log(testApiButton);
+  console.log(enabledToggle);
+
   saveButton.addEventListener('click', saveConfiguration);
   testApiButton.addEventListener('click', testApiEndpoint);
-
+  
   // Toggle status text when the toggle is clicked
   enabledToggle.addEventListener('change', () => {
     statusText.textContent = enabledToggle.checked ? 'Active' : 'Disabled';
@@ -208,4 +231,10 @@ const initialize = (): void => {
 };
 
 // Initialize when the DOM is ready
-document.addEventListener('DOMContentLoaded', initialize);
+// Use a more reliable approach for Chrome extensions
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initialize);
+} else {
+  // DOM is already ready
+  initialize();
+}
