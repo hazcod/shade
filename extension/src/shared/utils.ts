@@ -35,11 +35,19 @@ export const getDomain = (url: string): string => {
 export const loadConfig = async (): Promise<ExtensionConfig> => {
   return new Promise((resolve) => {
     chrome.storage.local.get('config', (result) => {
-      const config = result.config || DEFAULT_CONFIG;
+      const config: ExtensionConfig = result.config || { ...DEFAULT_CONFIG };
+
+      // Normalize legacy field name if present
+      // If a previous version stored `deviceId`, migrate it to `id`.
+      const anyConfig: any = config as any;
+      if (!config.id && anyConfig.deviceId) {
+        config.id = anyConfig.deviceId;
+        delete anyConfig.deviceId;
+      }
       
-      // Generate device ID if not present
-      if (!config.deviceId) {
-        config.deviceId = generateDeviceId();
+      // Generate device ID if not present (store in `id` as per schema)
+      if (!config.id) {
+        config.id = generateDeviceId();
         chrome.storage.local.set({ config });
       }
       
@@ -61,17 +69,31 @@ export const saveConfig = async (config: ExtensionConfig): Promise<void> => {
  * Send data to the backend API
  */
 export const sendToBackend = async (
-  endpoint: string, 
-  data: any, 
+  endpoint: string,
+  data: any,
   apiUrl: string
 ): Promise<Response> => {
   const url = `${apiUrl}${endpoint}`;
-  
+
+  // Load token from config to include Authorization header when available
+  let token = '';
+  try {
+    const config = await loadConfig();
+    token = config.token || '';
+  } catch (e) {
+    // Ignore config load error; proceed without auth header
+  }
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   return fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(data),
   });
 };

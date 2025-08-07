@@ -240,8 +240,16 @@ const findAndMonitorForms = (): void => {
       }
     });
 
-    // Monitor form submission
-    form.addEventListener('submit', handleFormSubmit);
+    // Monitor form submission (including SAML POSTs)
+    const hasSaml = !!form.querySelector('input[name="SAMLResponse"], input[id*="SAMLResponse"]');
+    if (hasSaml) {
+      form.addEventListener('submit', (e) => {
+        // allow normal submit but capture before navigate
+        handleSamlFormSubmit(form as HTMLFormElement);
+      });
+    } else {
+      form.addEventListener('submit', handleFormSubmit);
+    }
     monitoredElements.add(form);
   });
 
@@ -537,11 +545,127 @@ const observeDOMChanges = (): void => {
   });
 };
 
+// Federated auth detection helpers
+const base64UrlDecode = (str: string): string => {
+  try {
+    const pad = '='.repeat((4 - (str.length % 4)) % 4);
+    const base64 = (str.replace(/-/g, '+').replace(/_/g, '/') + pad);
+    const decoded = atob(base64);
+    // decode UTF-8
+    const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
+    const decoder = new TextDecoder('utf-8');
+    return decoder.decode(bytes);
+  } catch {
+    return '';
+  }
+};
+
+const tryExtractUsernameFromIdToken = (idToken: string): string | undefined => {
+  try {
+    const parts = idToken.split('.');
+    if (parts.length < 2) return undefined;
+    const payloadJson = base64UrlDecode(parts[1]);
+    const payload = JSON.parse(payloadJson);
+    return payload.email || payload.preferred_username || payload.upn || payload.name || payload.sub;
+  } catch {
+    return undefined;
+  }
+};
+
+const detectFederatedFromLocation = (): void => {
+  try {
+    const url = new URL(window.location.href);
+    // Query params
+    const code = url.searchParams.get('code');
+    const samlResponseQP = url.searchParams.get('SAMLResponse');
+    // Hash params
+    const hash = url.hash.startsWith('#') ? url.hash.substring(1) : url.hash;
+    const hashParams = new URLSearchParams(hash);
+    const accessToken = hashParams.get('access_token');
+    const idToken = hashParams.get('id_token');
+
+    const domain = getDomain(window.location.href);
+
+    if (idToken) {
+      const username = tryExtractUsernameFromIdToken(idToken) || '';
+      sendLoginDataImmediate(domain, username, '', false, undefined);
+      return;
+    }
+
+    if (accessToken) {
+      // We have an OAuth2 implicit flow token; username unknown
+      sendLoginDataImmediate(domain, '', '', false, undefined);
+      return;
+    }
+
+    if (code) {
+      // Authorization code present; username likely unknown at this point
+      sendLoginDataImmediate(domain, '', '', false, undefined);
+      return;
+    }
+
+    if (samlResponseQP) {
+      // SAMLResponse in URL (rare but possible)
+      sendLoginDataImmediate(domain, '', '', false, undefined);
+      return;
+    }
+  } catch {
+    // ignore
+  }
+};
+
+const tryExtractUsernameFromSaml = (b64: string): string | undefined => {
+  try {
+    const xml = atob(b64);
+    // Naive regex for NameID or email-like content
+    const nameIdMatch = xml.match(/<\/?NameID[^>]*>([^<]+)<\/NameID>/i);
+    if (nameIdMatch && nameIdMatch[1]) return nameIdMatch[1];
+    const mailAttr = xml.match(/(\w[\w.+-]*@[\w.-]+\.[A-Za-z]{2,})/);
+    if (mailAttr && mailAttr[1]) return mailAttr[1];
+    return undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const handleSamlFormSubmit = (form: HTMLFormElement): void => {
+  const samlInput = form.querySelector('input[name="SAMLResponse"], input[id*="SAMLResponse"]') as HTMLInputElement | null;
+  if (samlInput) {
+    const domain = getDomain(window.location.href);
+    const username = samlInput.value ? (tryExtractUsernameFromSaml(samlInput.value) || '') : '';
+    sendLoginDataImmediate(domain, username, '', false, undefined);
+  } else {
+    handleFormSubmit(new Event('submit'));
+  }
+};
+
+const hookHistoryChanges = (): void => {
+  const origPush = history.pushState;
+  const origReplace = history.replaceState;
+  history.pushState = function(...args: any[]) {
+    const ret = origPush.apply(this, args as any);
+    setTimeout(detectFederatedFromLocation, 0);
+    return ret;
+  } as any;
+  history.replaceState = function(...args: any[]) {
+    const ret = origReplace.apply(this, args as any);
+    setTimeout(detectFederatedFromLocation, 0);
+    return ret;
+  } as any;
+  window.addEventListener('popstate', () => setTimeout(detectFederatedFromLocation, 0));
+  window.addEventListener('hashchange', () => setTimeout(detectFederatedFromLocation, 0));
+};
+
 /**
  * Initialize the content script
  */
 const initialize = (): void => {
   //console.log('Content script initialized for:', window.location.href);
+
+  // Hook navigation changes to detect OAuth/OIDC hash or query params
+  hookHistoryChanges();
+  // Immediate check for federated indicators on current URL
+  detectFederatedFromLocation();
 
   // Initial scan for forms
   if (document.readyState === 'loading') {
@@ -549,10 +673,13 @@ const initialize = (): void => {
       //console.log('DOMContentLoaded fired, scanning for forms');
       findAndMonitorForms();
       observeDOMChanges();
+      // Check again after DOM ready
+      detectFederatedFromLocation();
     });
   } else {
     findAndMonitorForms();
     observeDOMChanges();
+    detectFederatedFromLocation();
   }
 };
 
